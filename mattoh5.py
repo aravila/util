@@ -31,7 +31,7 @@ class Convmattohdf5(object):
         Load features from pickle files in list.dat and store them in a hdf5 file
         This is meant for large dataset that cannot fit memory
         """
-        self.create_hdf5file(hdf5train, 'train_data', dim)
+        self.create_hdf5file(hdf5train, 'train', dim)
         print('\nReading mat files')
         for i in range(1,n_train):
             sample = h5py.File("%s/Sample_%d.mat"%(matCVD, i), 'r')
@@ -56,7 +56,7 @@ class Convmattohdf5(object):
             f.close()
 
 
-        self.create_hdf5file(hdf5valid, 'valid_data', dim)
+        self.create_hdf5file(hdf5valid, 'valid', dim)
         print('\nReading mat files')
         for i in range(n_train+1,n_train+ n_valid):
             sample = h5py.File("%s/Sample_%d.mat" % (matCVD, i), 'r')
