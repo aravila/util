@@ -89,7 +89,7 @@ class Convmattohdf5(object):
 matCVD = "/home/zahidakhtar/muse02/anderson/Video/CVD"
 matLIVE1 = "/home/zahidakhtar/muse02/anderson/Video/LIVE1"
 matLIVE2 = "/home/zahidakhtar/muse02/anderson/Video/LIVE2"
-hdf5train = "/home/zahidakhtar/muse02/anderson/Video/vqoe_train.hdf5"
-hdf5valid = "/home/zahidakhtar/muse02/anderson/Video/vqoe_valid.hdf5"
+hdf5train = "../vfeatures/vqoe_train.hdf5"
+hdf5valid = "../vfeatures/vqoe_valid.hdf5"
 video = Convmattohdf5()
 video.convert_wtables(matCVD, matLIVE1, matLIVE2, hdf5train, 1750, hdf5valid, 750, 25344)
