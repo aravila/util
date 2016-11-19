@@ -322,23 +322,23 @@ class MFStats(object):
         """
         # Energy distribution of speech along the modulation frequency
         """
-        mf_mean = np.mean(self.mf_param, axis=0)
-        return mf_mean.T
+        mf_mean = np.mean(self.mf_param, axis=1)
+        return mf_mean
 
     def get_mf_fea_2(self):
         """
         Spectral flatness
         """
-        mf_flat = scipy.stats.gmean(self.mf_param, axis=0)/np.mean(mf_param, axis=0)
-        return mf_flat.T
+        mf_flat = scipy.stats.gmean(self.mf_param, axis=1)/np.mean(self.mf_param, axis=1)
+        return mf_flat
 
     def get_mf_fea_3(self):
         """
         Spectral centroid
         """
         multiplier = np.arange(1, 24)
-        mf_num = np.einsum('i,ijk->kj', multiplier, self.mf_param)
-        mf_denom = np.einsum('ijk->kj', self.mf_param)
+        mf_num = np.einsum('i,kij->kj', multiplier, self.mf_param)
+        mf_denom = np.einsum('kij->kj', self.mf_param)
         mf_cent = mf_num / mf_denom
         return mf_cent
 
@@ -346,15 +346,14 @@ class MFStats(object):
         """
         Modulation spectral centroid
         """
-        mf_spect = np.empty(shape=[self.mf_param.shape[2], 0])
+        mf_spect = np.empty(shape=[self.mf_param.shape[0], 0])
         multiplier = np.arange(1, 9)  # 8 Modulation Features
         idx = np.array([[0, 1, 2, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16, 17], [18, 19, 20, 21, 22]])
         for i in range(0, 5):
-            aux = self.mf_param[idx[i], 0:8, :]
-            aux.shape
-            mf_num = np.einsum('ijk->kj', aux)
+            aux = self.mf_param[:, idx[i], 0:8]
+            mf_num = np.einsum('kij->kj', aux)
             mf_num = np.einsum('j,kj->k', multiplier, mf_num)
-            mf_denom = np.einsum('ijk->k', aux)
+            mf_denom = np.einsum('kij->k', aux)
             mf_spect = np.column_stack((mf_spect, mf_num / mf_denom))
         return mf_spect
 
@@ -362,7 +361,7 @@ class MFStats(object):
         """
         Linear regression and square error
         """
-        nObs = self.mf_param.shape[2]
+        nObs = self.mf_param.shape[0]
         mf_slope = np.empty(shape=[nObs, 0])
         mf_err = np.empty(shape=[nObs, 0])
         xaxis = np.arange(1, 9)  # 8 Modulation Features
@@ -370,8 +369,8 @@ class MFStats(object):
         x = np.repeat(x, nObs, axis=0).T
         idx = np.array([[0, 1, 2, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16, 17], [18, 19, 20, 21, 22]])
         for i in range(0, 5):
-            aux = self.mf_param[idx[i], 0:8, :]
-            mf_vlr = np.einsum('ijk->kj', aux).T
+            aux = self.mf_param[:, idx[i], 0:8]
+            mf_vlr = np.einsum('kij->kj', aux).T
             (ar, br) = polyfit(xaxis, mf_vlr, 1)
             xr = polyval([ar, br], x)
             # compute the mean square error
@@ -380,10 +379,52 @@ class MFStats(object):
             mf_err = np.column_stack((mf_err, err))
         return np.concatenate((mf_slope, mf_err), axis=1)
 
-    def combine_stats_csv(self):
+    def get_stats(self):
         mfstats = self.get_mf_fea_1()
         mfstats = np.concatenate((mfstats, self.get_mf_fea_2()), axis=1)
         mfstats = np.concatenate((mfstats, self.get_mf_fea_3()), axis=1)
         mfstats = np.concatenate((mfstats, self.get_mf_fea_4()), axis=1)
         mfstats = np.concatenate((mfstats, self.get_mf_fea_5()), axis=1)
         return mfstats
+
+    def moving_stats(self,modfea, w_size):
+        fea1 = np.empty(shape=[0, modfea.shape[1]])
+        fea2 = np.empty(shape=[0, modfea.shape[1]])
+        fea3 = np.empty(shape=[0, modfea.shape[1]])
+        fea4 = np.empty(shape=[0, modfea.shape[1]])
+
+        extraframe = int(w_size/2)
+
+        modtmp = np.reshape(modfea[0], (1, len(modfea[0])))
+        modtmp = np.repeat(modtmp, extraframe, axis=0)
+        modfea = np.vstack((modtmp, modfea))
+
+        modtmp = np.reshape(modfea[len(modfea)-1], (1, len(modfea[len(modfea)-1])))
+        modtmp = np.repeat(modtmp, extraframe+1, axis=0)
+        modfea = np.vstack((modfea, modtmp))
+
+        print("Extracting mean...")
+        for i in range(0, len(modfea)):
+            mf_mean = np.mean(modfea[0+i:10+i], axis=0)
+            fea1 = np.concatenate((fea1, np.reshape(mf_mean, (1, len(mf_mean)))), axis=0)
+        print("Extracting std...")
+        for i in range(0, len(modfea)):
+            mf_std = np.std(modfea[0+i:10+i], axis=0)
+            fea2 = np.concatenate((fea2, np.reshape(mf_std, (1, len(mf_std)))), axis=0)
+        print("Extracting skewness...")
+        for i in range(0, len(modfea)):
+            mf_skewness = stats.skew(modfea[0+i:10+i], axis=0)
+            fea3 = np.concatenate((fea3, np.reshape(mf_skewness, (1, len(mf_skewness)))), axis=0)
+        print("Extracting kurtosis...")
+        for i in range(0, len(modfea)):
+            mf_kurtosis = stats.kurtosis(modfea[0+i:10+i], axis=0)
+            fea4 = np.concatenate((fea4, np.reshape(mf_kurtosis, (1, len(mf_kurtosis)))), axis=0)
+
+        mfstats = np.empty(shape=[fea1.shape[0], 0])
+        mfstats = np.concatenate((mfstats, fea1), axis=1)
+        mfstats = np.concatenate((mfstats, fea2), axis=1)
+        mfstats = np.concatenate((mfstats, fea3), axis=1)
+        mfstats = np.concatenate((mfstats, fea4), axis=1)
+
+        return mfstats
+
