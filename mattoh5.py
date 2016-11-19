@@ -75,7 +75,7 @@ class Convmattohdf5(object):
 
             print("\nAppending Sample_%d.mat content into %s" % (i, hdf5train))
             f = tables.open_file(hdf5train, mode='a')
-            data_storage = f.root.train
+            data_storage = f.root.valid
             for n, (d) in enumerate(zip(data)):
                 data_storage.append(data[n][None])
             f.close()
