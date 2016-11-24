@@ -73,7 +73,7 @@ class Audiofrontend(object):
         filters = tables.Filters(complevel=5, complib='blosc')
         print("*************this is the dataname*************")
         print(dataname)
-        data_storage = f.create_earray(f.root, dataname,
+        data_storage = f.createEArray(f.root, dataname,
                                               tables.Atom.from_dtype(data.dtype),
                                               shape=(0, data.shape[-1]),
                                               filters=filters,
