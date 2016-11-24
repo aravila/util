@@ -8,6 +8,7 @@ import pickle
 import scipy.io
 import srmrpy as srmr
 from scipy import io, polyval, polyfit, sqrt, stats
+import tables
 
 class Audiofrontend(object):
 
@@ -44,12 +45,12 @@ class Audiofrontend(object):
         line = f.readline().rstrip('\n')
         print('\nReading file %s' % (filepath))
         while (line != ""):
-            data = np.concatenate((data, get_feat((line.rstrip('\n')))), axis=0)
+            data = np.concatenate((data, self.get_feat((line.rstrip('\n')))), axis=0)
             line = f.readline()
         f.closed
         return data
 
-    def feat_ext_audio(self, folders=['.'], olap=2, nlength=512, FS=16000):
+    def feat_ext_stft(self, folders=['.'], olap=2, nlength=512, FS=16000):
         """
         Receive a list of folders and look for .wav file to extract STFT
         All audio files are resampled to 16 kHz if FS is not specified
@@ -60,7 +61,65 @@ class Audiofrontend(object):
             dirs = os.listdir(folders[d].rstrip('\n'))
             for file in dirs:
                 if file.endswith('.wav'):
-                    data = np.concatenate((data, stft_audio(folders[d].rstrip('\n'), file, olap, nlength, FS)), axis=0)
+                    data = np.concatenate((data, self.stft_audio(folders[d].rstrip('\n'), file, olap, nlength, FS)), axis=0)
+        return data
+
+    def create_hdf5file(self, hdf5file, dataname, dim):
+        """
+        Create an empty hdf5 files to store features
+        """
+        data = np.empty([0, dim])
+        f = tables.open_file(hdf5file, mode='w')
+        filters = tables.Filters(complevel=5, complib='blosc')
+        print("*************this is the dataname*************")
+        print(dataname)
+        data_storage = f.create_earray(f.root, dataname,
+                                              tables.Atom.from_dtype(data.dtype),
+                                              shape=(0, data.shape[-1]),
+                                              filters=filters,
+                                              expectedrows=len(data))
+        for n, (d) in enumerate(zip(data)):
+            data_storage.append(data[n][None])
+        f.close()
+
+    def convert_wtables(self, wavpathlist = "../afeatures/data.dat", hdf5file = "../afeatures/srmr_train.hdf5", dataname = "train", dim = 184):
+        """
+        Load features from pickle files in list.dat and store them in a hdf5 file
+        This is meant for large dataset that cannot fit memory
+        """
+        self.create_hdf5file(hdf5file, "train", dim)
+        flist = open(wavpathlist, 'r')
+        line = flist.readline().rstrip('\n')
+        print('\nReading file %s' % (wavpathlist))
+        while (line != ""):
+            print('Processing files in %s' % (line))
+            dirs = os.listdir(line.rstrip('\n'))
+            data = self.feat_ext_mf(line.rstrip('\n'), dirs, dim)
+
+            f = tables.open_file(hdf5file, mode='a')
+            if type == "train":
+                data_storage = f.root.train
+            else:
+                data_storage = f.root.train
+            for n, (d) in enumerate(zip(data)):
+                data_storage.append(data[n][None])
+            f.close()
+            line = flist.readline()
+        flist.close()
+
+
+    def feat_ext_mf(self, folder, dirs, dim, FS=16000):
+        """
+        Look for .wav file to extract Modulation Features
+        All audio files are resampled to 16 kHz if FS is not specified
+        """
+        data = np.empty([0, dim])
+        for file in dirs:
+            if file.endswith('.wav'):
+                mf = self.srmr_audio(folder, file, FS)
+                mf = np.einsum('ijk->kij', mf)
+                mf = np.reshape(mf, (mf.shape[0], mf.shape[1] * mf.shape[2]))
+                data = np.concatenate((data, mf), axis=0)
         return data
 
 
@@ -82,7 +141,7 @@ class Audiofrontend(object):
         specgram = stft.spectrogram(s, framelength=nlength, overlap=olap)
         return specgram.T
 
-    def srmr_audio(self, path, file, featdim = 0, FS=16000):
+    def srmr_audio(self, path, file, FS=16000):
         """
         http://stft.readthedocs.io/en/latest/index.html
         Receive specific folder and file to extract Modulation Features
