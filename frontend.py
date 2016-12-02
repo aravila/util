@@ -71,9 +71,7 @@ class Audiofrontend(object):
         data = np.empty([0, dim])
         f = tables.open_file(hdf5file, mode='w')
         filters = tables.Filters(complevel=5, complib='blosc')
-        print("*************this is the dataname*************")
-        print(dataname)
-        data_storage = f.createEArray(f.root, dataname,
+        data_storage = f.create_earray(f.root, dataname,
                                               tables.Atom.from_dtype(data.dtype),
                                               shape=(0, data.shape[-1]),
                                               filters=filters,
@@ -82,12 +80,13 @@ class Audiofrontend(object):
             data_storage.append(data[n][None])
         f.close()
 
-    def convert_wtables(self, wavpathlist = "../afeatures/data.dat", hdf5file = "../afeatures/srmr_train.hdf5", dataname = "train", dim = 184):
+    def extract_modfeat(self, wavpathlist = "../afeatures/data.dat", hdf5file = "../afeatures/srmr_train.hdf5", new = 1, dataname = "train", dim = 184):
         """
-        Load features from pickle files in list.dat and store them in a hdf5 file
+        Extract modulation features from .wav in folders in list.dat and store them in a hdf5 file
         This is meant for large dataset that cannot fit memory
         """
-        self.create_hdf5file(hdf5file, "train", dim)
+        if new == 1:
+            self.create_hdf5file(hdf5file, "train", dim)
         flist = open(wavpathlist, 'r')
         line = flist.readline().rstrip('\n')
         print('\nReading file %s' % (wavpathlist))
