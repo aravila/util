@@ -512,10 +512,10 @@ class MFStats(object):
         for i in range(0, len(modfea)):
             mf_max = np.amax(modfea[0+i:10+i], axis=0)
             fea8 = np.concatenate((fea8, np.reshape(mf_max, (1, len(mf_max)))), axis=0)
-        print("Extracting momentum...")
+        print("Extracting moment...")
         for i in range(0, len(modfea)):
-            mf_momentum = stats.momentum(modfea[0+i:10+i], axis=0)
-            fea9 = np.concatenate((fea9, np.reshape(mf_momentum, (1, len(mf_momentum)))), axis=0)
+            mf_moment = stats.moment(modfea[0+i:10+i], axis=0)
+            fea9 = np.concatenate((fea9, np.reshape(mf_moment, (1, len(mf_moment)))), axis=0)
 
         mfstats = np.empty(shape=[fea1.shape[0], 0])
         mfstats = np.concatenate((mfstats, fea1), axis=1)
