@@ -96,7 +96,7 @@ class Audiofrontend(object):
             print('Processing files in %s' % (line))
             dirs = os.listdir(line.rstrip('\n'))
             data = self.extract_fea_mode(stftmode, line.rstrip('\n'), dirs)
-            if new == 1 and nline == 1:
+            if new == 1 and nline == 1 and len(data.shape) > 1:
                 self.create_hdf5file(hdf5file, dataname, data.shape[1])
 
             f = tables.open_file(hdf5file, mode='a')
