@@ -9,6 +9,8 @@ import scipy.io
 import srmrpy as srmr
 from scipy import io, polyval, polyfit, sqrt, stats
 import tables
+import librosa
+#import librosa.display as disp
 
 class Audiofrontend(object):
 
@@ -61,7 +63,7 @@ class Audiofrontend(object):
             dirs = os.listdir(folders[d].rstrip('\n'))
             for file in dirs:
                 if file.endswith('.wav'):
-                    data = np.concatenate((data, self.stft_audio(folders[d].rstrip('\n'), file, olap, nlength, FS)), axis=0)
+                    data = np.concatenate((data, self.stft_audio2(folders[d].rstrip('\n'), file, olap, nlength, FS)), axis=0)
         return data
 
     def create_hdf5file(self, hdf5file, dataname, dim):
@@ -80,26 +82,28 @@ class Audiofrontend(object):
             data_storage.append(data[n][None])
         f.close()
 
-    def extract_modfeat(self, wavpathlist = "../afeatures/data.dat", hdf5file = "../afeatures/srmr_train.hdf5", new = 1, dataname = "train", dim = 184):
+    def extract_feature(self, stftmode = 1, wavpathlist = "../afeatures/data.dat", hdf5file = "../afeatures/srmr_train.hdf5", new = 1, dataname = "train"):
         """
         Extract modulation features from .wav in folders in list.dat and store them in a hdf5 file
         This is meant for large dataset that cannot fit memory
         """
-        if new == 1:
-            self.create_hdf5file(hdf5file, "train", dim)
         flist = open(wavpathlist, 'r')
         line = flist.readline().rstrip('\n')
         print('\nReading file %s' % (wavpathlist))
+        nline = 0
         while (line != ""):
+            nline += 1
             print('Processing files in %s' % (line))
             dirs = os.listdir(line.rstrip('\n'))
-            data = self.feat_ext_mf(line.rstrip('\n'), dirs, dim)
+            data = self.extract_fea_mode(stftmode, line.rstrip('\n'), dirs)
+            if new == 1 and nline == 1:
+                self.create_hdf5file(hdf5file, dataname, data.shape[1])
 
             f = tables.open_file(hdf5file, mode='a')
-            if type == "train":
+            if dataname == "train":
                 data_storage = f.root.train
             else:
-                data_storage = f.root.train
+                data_storage = f.root.valid
             for n, (d) in enumerate(zip(data)):
                 data_storage.append(data[n][None])
             f.close()
@@ -107,29 +111,35 @@ class Audiofrontend(object):
         flist.close()
 
 
-    def feat_ext_mf(self, folder, dirs, dim, FS=16000):
+    def extract_fea_mode(self, stftmode, folder, dirs, FS=16000):
         """
         Look for .wav file to extract Modulation Features
         All audio files are resampled to 16 kHz if FS is not specified
         """
-        data = np.empty([0, dim])
+        data = np.empty(0)
         for file in dirs:
             if file.endswith('.wav'):
-                mf = self.srmr_audio(folder, file, FS)
-                mf = np.einsum('ijk->kij', mf)
-                mf = np.reshape(mf, (mf.shape[0], mf.shape[1] * mf.shape[2]))
-                data = np.concatenate((data, mf), axis=0)
+                if stftmode == 0:
+                    mf = self.srmr_audio(folder, file, FS)
+                    mf = np.einsum('ijk->kij', mf)
+                    mf = np.reshape(mf, (mf.shape[0], mf.shape[1] * mf.shape[2]))
+                    if data.shape[0] == 0:
+                        data = mf
+                    data = np.concatenate((data, mf), axis=0)
+                else:
+                    stft = self.stft_audio(folder, file, FS)
+                    if data.shape[0] == 0:
+                        data = stft
+                    data = np.concatenate((data, stft), axis=0)
         return data
 
 
-    def stft_audio(self, path, file, olap, nlength, FS=16000):
+    def stft_audio(self, path, file, nlength = 512, olap = 2, librosamode = 1, FS=16000):
         """
         http://stft.readthedocs.io/en/latest/index.html
         Receive specific folder and file to extract the STFT
         All audio are resample to 16 kHz if FS is not specified
         """
-        ret_spec = np.empty([0, 257])
-        directory = '../rsplwav'
         fs, s = wav.read('%s/%s' % (path, file))
         dim = len(s.shape)
         if (dim>1):
@@ -137,7 +147,11 @@ class Audiofrontend(object):
         if (fs != FS):
             n_s = round(len(s) * (FS / fs))
             s = signal.resample(s, n_s)
-        specgram = stft.spectrogram(s, framelength=nlength, overlap=olap)
+        if librosamode == 0:
+            specgram = stft.spectrogram(s, framelength=nlength, overlap=olap)
+        else:
+            S = librosa.stft(s, n_fft=nlength, hop_length= olap)
+            specgram = librosa.logamplitude(np.abs(S))
         return specgram.T
 
     def srmr_audio(self, path, file, FS=16000):
@@ -154,8 +168,6 @@ class Audiofrontend(object):
             n_s = round(len(s) * (FS / fs))
             s = signal.resample(s, n_s)
         ratio, energy = srmr.srmr(s, FS, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, norm=False)
-        #if (featdim == 1):
-        #    energy = np.reshape(energy, ((energy.shape[0] * energy.shape[1]), energy.shape[2])).T
 
         return energy
 
