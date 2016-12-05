@@ -92,21 +92,22 @@ class Audiofrontend(object):
         print('\nReading file %s' % (wavpathlist))
         nline = 0
         while (line != ""):
-            nline += 1
             print('Processing files in %s' % (line))
             dirs = os.listdir(line.rstrip('\n'))
             data = self.extract_fea_mode(stftmode, line.rstrip('\n'), dirs)
-            if new == 1 and nline == 1 and len(data.shape) > 1:
-                self.create_hdf5file(hdf5file, dataname, data.shape[1])
+            if len(data.shape) > 1:
+                nline += 1
+                if new == 1 and nline == 1:
+                    self.create_hdf5file(hdf5file, dataname, data.shape[1])
 
-            f = tables.open_file(hdf5file, mode='a')
-            if dataname == "train":
-                data_storage = f.root.train
-            else:
-                data_storage = f.root.valid
-            for n, (d) in enumerate(zip(data)):
-                data_storage.append(data[n][None])
-            f.close()
+                f = tables.open_file(hdf5file, mode='a')
+                if dataname == "train":
+                    data_storage = f.root.train
+                else:
+                    data_storage = f.root.valid
+                for n, (d) in enumerate(zip(data)):
+                    data_storage.append(data[n][None])
+                f.close()
             line = flist.readline()
         flist.close()
 
@@ -130,11 +131,12 @@ class Audiofrontend(object):
                     stft = self.stft_audio(folder, file, FS)
                     if data.shape[0] == 0:
                         data = stft
-                    data = np.concatenate((data, stft), axis=0)
+                    else:
+                        data = np.concatenate((data, stft), axis=0)
         return data
 
 
-    def stft_audio(self, path, file, nlength = 1024, olap = 2, librosamode = 1, FS=16000):
+    def stft_audio(self, path, file, nlength = 1024, olap = 4, librosamode = 1, FS=16000):
         """
         http://stft.readthedocs.io/en/latest/index.html
         Receive specific folder and file to extract the STFT
@@ -150,7 +152,8 @@ class Audiofrontend(object):
         if librosamode == 0:
             specgram = stft.spectrogram(s, framelength=nlength, overlap=olap)
         else:
-            S = librosa.stft(s, n_fft=nlength, hop_length= olap)
+            #S = librosa.stft(s, n_fft=nlength, hop_length= olap)
+            S = librosa.stft(s)
             specgram = librosa.logamplitude(np.abs(S))
         return specgram.T
 
