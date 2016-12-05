@@ -134,7 +134,7 @@ class Audiofrontend(object):
         return data
 
 
-    def stft_audio(self, path, file, nlength = 512, olap = 2, librosamode = 1, FS=16000):
+    def stft_audio(self, path, file, nlength = 1024, olap = 2, librosamode = 1, FS=16000):
         """
         http://stft.readthedocs.io/en/latest/index.html
         Receive specific folder and file to extract the STFT
