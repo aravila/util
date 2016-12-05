@@ -465,6 +465,10 @@ class MFStats(object):
         fea2 = np.empty(shape=[0, modfea.shape[1]])
         fea3 = np.empty(shape=[0, modfea.shape[1]])
         fea4 = np.empty(shape=[0, modfea.shape[1]])
+        fea5 = np.empty(shape=[0, modfea.shape[1]])
+        fea6 = np.empty(shape=[0, modfea.shape[1]])
+        fea7 = np.empty(shape=[0, modfea.shape[1]])
+        fea8 = np.empty(shape=[0, modfea.shape[1]])
 
         extraframe = int(w_size/2)
 
@@ -492,12 +496,32 @@ class MFStats(object):
         for i in range(0, len(modfea)):
             mf_kurtosis = stats.kurtosis(modfea[0+i:10+i], axis=0)
             fea4 = np.concatenate((fea4, np.reshape(mf_kurtosis, (1, len(mf_kurtosis)))), axis=0)
+        print("Extracting range...")
+        for i in range(0, len(modfea)):
+            mf_ptp = np.ptp(modfea[0+i:10+i], axis=0)
+            fea5 = np.concatenate((fea5, np.reshape(mf_ptp, (1, len(mf_ptp)))), axis=0)
+        print("Extracting variance...")
+        for i in range(0, len(modfea)):
+            mf_variance = np.var(modfea[0+i:10+i], axis=0)
+            fea6 = np.concatenate((fea6, np.reshape(mf_variance, (1, len(mf_variance)))), axis=0)
+        print("Extracting min...")
+        for i in range(0, len(modfea)):
+            mf_min = np.amin(modfea[0+i:10+i], axis=0)
+            fea7 = np.concatenate((fea7, np.reshape(mf_min, (1, len(mf_min)))), axis=0)
+        print("Extracting max...")
+        for i in range(0, len(modfea)):
+            mf_max = np.amax(modfea[0+i:10+i], axis=0)
+            fea8 = np.concatenate((fea8, np.reshape(mf_max, (1, len(mf_max)))), axis=0)
 
         mfstats = np.empty(shape=[fea1.shape[0], 0])
         mfstats = np.concatenate((mfstats, fea1), axis=1)
         mfstats = np.concatenate((mfstats, fea2), axis=1)
         mfstats = np.concatenate((mfstats, fea3), axis=1)
         mfstats = np.concatenate((mfstats, fea4), axis=1)
+        mfstats = np.concatenate((mfstats, fea5), axis=1)
+        mfstats = np.concatenate((mfstats, fea6), axis=1)
+        mfstats = np.concatenate((mfstats, fea7), axis=1)
+        mfstats = np.concatenate((mfstats, fea8), axis=1)
 
         return mfstats
 
