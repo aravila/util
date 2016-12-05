@@ -469,6 +469,7 @@ class MFStats(object):
         fea6 = np.empty(shape=[0, modfea.shape[1]])
         fea7 = np.empty(shape=[0, modfea.shape[1]])
         fea8 = np.empty(shape=[0, modfea.shape[1]])
+        fea9 = np.empty(shape=[0, modfea.shape[1]])
 
         extraframe = int(w_size/2)
 
