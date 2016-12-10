@@ -9,6 +9,8 @@ import scipy.io
 import srmrpy as srmr
 from scipy import io, polyval, polyfit, sqrt, stats
 import tables
+import librosa
+#import librosa.display as disp
 
 class Audiofrontend(object):
 
@@ -61,7 +63,7 @@ class Audiofrontend(object):
             dirs = os.listdir(folders[d].rstrip('\n'))
             for file in dirs:
                 if file.endswith('.wav'):
-                    data = np.concatenate((data, self.stft_audio(folders[d].rstrip('\n'), file, olap, nlength, FS)), axis=0)
+                    data = np.concatenate((data, self.stft_audio2(folders[d].rstrip('\n'), file, olap, nlength, FS)), axis=0)
         return data
 
     def create_hdf5file(self, hdf5file, dataname, dim):
@@ -71,9 +73,7 @@ class Audiofrontend(object):
         data = np.empty([0, dim])
         f = tables.open_file(hdf5file, mode='w')
         filters = tables.Filters(complevel=5, complib='blosc')
-        print("*************this is the dataname*************")
-        print(dataname)
-        data_storage = f.createEArray(f.root, dataname,
+        data_storage = f.create_earray(f.root, dataname,
                                               tables.Atom.from_dtype(data.dtype),
                                               shape=(0, data.shape[-1]),
                                               filters=filters,
@@ -82,55 +82,66 @@ class Audiofrontend(object):
             data_storage.append(data[n][None])
         f.close()
 
-    def convert_wtables(self, wavpathlist = "../afeatures/data.dat", hdf5file = "../afeatures/srmr_train.hdf5", dataname = "train", dim = 184):
+    def extract_feature(self, stftmode = 1, wavpathlist = "../afeatures/data.dat", hdf5file = "../afeatures/srmr_train.hdf5", new = 1, dataname = "train"):
         """
-        Load features from pickle files in list.dat and store them in a hdf5 file
+        Extract modulation features from .wav in folders in list.dat and store them in a hdf5 file
         This is meant for large dataset that cannot fit memory
         """
-        self.create_hdf5file(hdf5file, "train", dim)
         flist = open(wavpathlist, 'r')
         line = flist.readline().rstrip('\n')
         print('\nReading file %s' % (wavpathlist))
+        nline = 0
         while (line != ""):
             print('Processing files in %s' % (line))
             dirs = os.listdir(line.rstrip('\n'))
-            data = self.feat_ext_mf(line.rstrip('\n'), dirs, dim)
+            data = self.extract_fea_mode(stftmode, line.rstrip('\n'), dirs)
+            if len(data.shape) > 1:
+                nline += 1
+                if new == 1 and nline == 1:
+                    self.create_hdf5file(hdf5file, dataname, data.shape[1])
 
-            f = tables.open_file(hdf5file, mode='a')
-            if type == "train":
-                data_storage = f.root.train
-            else:
-                data_storage = f.root.train
-            for n, (d) in enumerate(zip(data)):
-                data_storage.append(data[n][None])
-            f.close()
+                f = tables.open_file(hdf5file, mode='a')
+                if dataname == "train":
+                    data_storage = f.root.train
+                else:
+                    data_storage = f.root.valid
+                for n, (d) in enumerate(zip(data)):
+                    data_storage.append(data[n][None])
+                f.close()
             line = flist.readline()
         flist.close()
 
 
-    def feat_ext_mf(self, folder, dirs, dim, FS=16000):
+    def extract_fea_mode(self, stftmode, folder, dirs, FS=16000):
         """
         Look for .wav file to extract Modulation Features
         All audio files are resampled to 16 kHz if FS is not specified
         """
-        data = np.empty([0, dim])
+        data = np.empty(0)
         for file in dirs:
             if file.endswith('.wav'):
-                mf = self.srmr_audio(folder, file, FS)
-                mf = np.einsum('ijk->kij', mf)
-                mf = np.reshape(mf, (mf.shape[0], mf.shape[1] * mf.shape[2]))
-                data = np.concatenate((data, mf), axis=0)
+                if stftmode == 0:
+                    mf = self.srmr_audio(folder, file, FS)
+                    mf = np.einsum('ijk->kij', mf)
+                    mf = np.reshape(mf, (mf.shape[0], mf.shape[1] * mf.shape[2]))
+                    if data.shape[0] == 0:
+                        data = mf
+                    data = np.concatenate((data, mf), axis=0)
+                else:
+                    stft = self.stft_audio(folder, file, FS)
+                    if data.shape[0] == 0:
+                        data = stft
+                    else:
+                        data = np.concatenate((data, stft), axis=0)
         return data
 
 
-    def stft_audio(self, path, file, olap, nlength, FS=16000):
+    def stft_audio(self, path, file, nlength = 1024, olap = 4, librosamode = 1, FS=16000):
         """
         http://stft.readthedocs.io/en/latest/index.html
         Receive specific folder and file to extract the STFT
         All audio are resample to 16 kHz if FS is not specified
         """
-        ret_spec = np.empty([0, 257])
-        directory = '../rsplwav'
         fs, s = wav.read('%s/%s' % (path, file))
         dim = len(s.shape)
         if (dim>1):
@@ -138,7 +149,12 @@ class Audiofrontend(object):
         if (fs != FS):
             n_s = round(len(s) * (FS / fs))
             s = signal.resample(s, n_s)
-        specgram = stft.spectrogram(s, framelength=nlength, overlap=olap)
+        if librosamode == 0:
+            specgram = stft.spectrogram(s, framelength=nlength, overlap=olap)
+        else:
+            #S = librosa.stft(s, n_fft=nlength, hop_length= olap)
+            S = librosa.stft(s)
+            specgram = librosa.logamplitude(np.abs(S))
         return specgram.T
 
     def srmr_audio(self, path, file, FS=16000):
@@ -155,8 +171,6 @@ class Audiofrontend(object):
             n_s = round(len(s) * (FS / fs))
             s = signal.resample(s, n_s)
         ratio, energy = srmr.srmr(s, FS, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, norm=False)
-        #if (featdim == 1):
-        #    energy = np.reshape(energy, ((energy.shape[0] * energy.shape[1]), energy.shape[2])).T
 
         return energy
 
@@ -451,6 +465,10 @@ class MFStats(object):
         fea2 = np.empty(shape=[0, modfea.shape[1]])
         fea3 = np.empty(shape=[0, modfea.shape[1]])
         fea4 = np.empty(shape=[0, modfea.shape[1]])
+        fea5 = np.empty(shape=[0, modfea.shape[1]])
+        fea6 = np.empty(shape=[0, modfea.shape[1]])
+        fea7 = np.empty(shape=[0, modfea.shape[1]])
+        fea8 = np.empty(shape=[0, modfea.shape[1]])
 
         extraframe = int(w_size/2)
 
@@ -464,26 +482,46 @@ class MFStats(object):
 
         print("Extracting mean...")
         for i in range(0, len(modfea)):
-            mf_mean = np.mean(modfea[0+i:10+i], axis=0)
+            mf_mean = np.mean(modfea[0+i:w_size+i], axis=0)
             fea1 = np.concatenate((fea1, np.reshape(mf_mean, (1, len(mf_mean)))), axis=0)
         print("Extracting std...")
         for i in range(0, len(modfea)):
-            mf_std = np.std(modfea[0+i:10+i], axis=0)
+            mf_std = np.std(modfea[0+i:w_size+i], axis=0)
             fea2 = np.concatenate((fea2, np.reshape(mf_std, (1, len(mf_std)))), axis=0)
         print("Extracting skewness...")
         for i in range(0, len(modfea)):
-            mf_skewness = stats.skew(modfea[0+i:10+i], axis=0)
+            mf_skewness = stats.skew(modfea[0+i:w_size+i], axis=0)
             fea3 = np.concatenate((fea3, np.reshape(mf_skewness, (1, len(mf_skewness)))), axis=0)
         print("Extracting kurtosis...")
         for i in range(0, len(modfea)):
-            mf_kurtosis = stats.kurtosis(modfea[0+i:10+i], axis=0)
+            mf_kurtosis = stats.kurtosis(modfea[0+i:w_size+i], axis=0)
             fea4 = np.concatenate((fea4, np.reshape(mf_kurtosis, (1, len(mf_kurtosis)))), axis=0)
+        print("Extracting range...")
+        for i in range(0, len(modfea)):
+            mf_ptp = np.ptp(modfea[0+i:w_size+i], axis=0)
+            fea5 = np.concatenate((fea5, np.reshape(mf_ptp, (1, len(mf_ptp)))), axis=0)
+        print("Extracting variance...")
+        for i in range(0, len(modfea)):
+            mf_variance = np.var(modfea[0+i:w_size+i], axis=0)
+            fea6 = np.concatenate((fea6, np.reshape(mf_variance, (1, len(mf_variance)))), axis=0)
+        print("Extracting min...")
+        for i in range(0, len(modfea)):
+            mf_min = np.amin(modfea[0+i:w_size+i], axis=0)
+            fea7 = np.concatenate((fea7, np.reshape(mf_min, (1, len(mf_min)))), axis=0)
+        print("Extracting max...")
+        for i in range(0, len(modfea)):
+            mf_max = np.amax(modfea[0+i:w_size+i], axis=0)
+            fea8 = np.concatenate((fea8, np.reshape(mf_max, (1, len(mf_max)))), axis=0)
 
         mfstats = np.empty(shape=[fea1.shape[0], 0])
         mfstats = np.concatenate((mfstats, fea1), axis=1)
         mfstats = np.concatenate((mfstats, fea2), axis=1)
         mfstats = np.concatenate((mfstats, fea3), axis=1)
         mfstats = np.concatenate((mfstats, fea4), axis=1)
+        mfstats = np.concatenate((mfstats, fea5), axis=1)
+        mfstats = np.concatenate((mfstats, fea6), axis=1)
+        mfstats = np.concatenate((mfstats, fea7), axis=1)
+        mfstats = np.concatenate((mfstats, fea8), axis=1)
 
         return mfstats
 
